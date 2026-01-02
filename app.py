@@ -1,9 +1,11 @@
+# app.py
 import streamlit as st
 import tensorflow as tf
 import numpy as np
 from PIL import Image
 import json
 import time
+import os
 
 # ====================== CẤU HÌNH ======================
 st.set_page_config(
@@ -15,9 +17,15 @@ st.set_page_config(
 # ====================== LOAD MODEL ======================
 @st.cache_resource
 def load_model():
-    model = tf.keras.models.load_model('model/mobilenetv2_finetuned.keras')
-    with open('model/class_indices.json', 'r') as f:
+    model_path = os.path.join("model", "mobilenetv2_finetuned.keras")
+    class_indices_path = os.path.join("model", "class_indices.json")
+    
+    model = tf.keras.models.load_model(model_path)
+    
+    with open(class_indices_path, 'r') as f:
         class_indices = json.load(f)
+    
+    # Đảo key-value: từ idx -> class name
     idx_to_class = {v: k for k, v in class_indices.items()}
     return model, idx_to_class
 
@@ -35,20 +43,32 @@ def preprocess_image(image):
 st.title("🌿 Hệ thống chẩn đoán bệnh cây trồng")
 st.markdown("---")
 
-col1, col2 = st.columns([1,2])
+col1, col2 = st.columns([1, 2])
 
 with col1:
     st.subheader("📤 Tải lên ảnh lá cây")
     
-    option = st.radio("Chọn cách tải ảnh:", ["📁 Upload từ máy", "📷 Chụp ảnh trực tiếp"])
+    option = st.radio(
+        "Chọn cách tải ảnh:",
+        ["📁 Upload từ máy", "📷 Chụp ảnh trực tiếp"]
+    )
+    
     uploaded_file = None
     
     if option == "📁 Upload từ máy":
-        uploaded_file = st.file_uploader("Chọn ảnh lá cây", type=['jpg','jpeg','png'])
+        uploaded_file = st.file_uploader(
+            "Chọn ảnh lá cây",
+            type=['jpg', 'jpeg', 'png']
+        )
     else:
         uploaded_file = st.camera_input("Chụp ảnh lá cây")
     
-    predict_btn = st.button("🔍 Phân tích bệnh", disabled=uploaded_file is None)
+    predict_btn = st.button(
+        "🔍 Phân tích bệnh",
+        type="primary",
+        disabled=uploaded_file is None,
+        use_container_width=True
+    )
 
 with col2:
     st.subheader("📊 Kết quả phân tích")
@@ -57,7 +77,8 @@ with col2:
         image = Image.open(uploaded_file)
         
         with st.spinner("🔄 Đang phân tích..."):
-            time.sleep(1)
+            time.sleep(1)  # Hiệu ứng loading
+            
             img_array = preprocess_image(image)
             predictions = model.predict(img_array, verbose=0)
             predicted_idx = np.argmax(predictions[0])
@@ -84,11 +105,13 @@ with col2:
             
             st.subheader("🎯 Top 3 dự đoán")
             top_indices = np.argsort(predictions[0])[-3:][::-1]
+            
             for i, idx in enumerate(top_indices):
                 conf = float(predictions[0][idx])
-                disease = idx_to_class[idx].replace("_"," ")
+                disease = idx_to_class[idx].replace("_", " ")
                 st.write(f"{i+1}. {disease}: {conf*100:.1f}%")
 
+# ====================== HƯỚNG DẪN ======================
 st.markdown("---")
 with st.expander("ℹ️ Hướng dẫn sử dụng"):
     st.markdown("""
@@ -96,6 +119,18 @@ with st.expander("ℹ️ Hướng dẫn sử dụng"):
     1. Chụp/tải ảnh lá cây cần chẩn đoán
     2. Nhấn nút "Phân tích bệnh"
     3. Đọc kết quả và độ tin cậy
+    
+    ### 🌱 Mẹo chụp ảnh tốt:
+    - Chụp lá bị bệnh rõ ràng
+    - Ánh sáng đủ, không bị mờ
+    - Lấy toàn bộ lá trong khung hình
+    
+    ### ⚠️ Lưu ý:
+    - Hệ thống nhận diện được **38 loại bệnh** trên cây trồng
+    - Kết quả mang tính tham khảo
+    - Nên tham khảo ý kiến chuyên gia nông nghiệp
     """)
 
+st.markdown("---")
+st.caption("Đồ án AI - Nhận diện bệnh cây trồng | Sử dụng PlantVillage Dataset")
 
